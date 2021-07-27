@@ -1,0 +1,34 @@
+name: Short lived account detected
+description: |
+  'An account has been added and deleted within 24 hours'
+severity: High
+queryFrequency: 1d
+queryPeriod: 1d
+tactics:
+  - Privilege Escalation
+query: |
+  let timeFrame = 24h;
+  let addedUsers = AuditLogs
+  | where OperationName contains "add user"
+  | where Result contains "success"
+  | extend AddInitiatedBy=iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app)
+  | extend UserAdded = tostring(TargetResources[0].userPrincipalName)
+  | extend UserAddedId = tostring(TargetResources[0].id)
+  | extend TimeAdded = TimeGenerated
+  | project TimeAdded, AddInitiatedBy, UserAdded, UserAddedId;
+  let deletedUsers = AuditLogs
+  | where OperationName contains "delete user"
+  | where Result contains "success"
+  | extend DeleteInitiatedBy=iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app)
+  | extend UserDeleted = tostring(TargetResources[0].userPrincipalName)
+  | extend UserDeletedId = tostring(TargetResources[0].id)
+  | extend TimeDeleted = TimeGenerated
+  | project TimeDeleted, DeleteInitiatedBy, UserDeleted, UserDeletedId;
+  let accountsCreatedDeleted = addedUsers
+  | join kind=inner deletedUsers on $left.UserAddedId==$right.UserDeletedId
+  | extend Account = UserAdded
+  | extend AccountId = UserAddedId
+  | where TimeDeleted - TimeAdded < timeFrame
+  | project Account, AccountId, TimeAdded, AddInitiatedBy, TimeDeleted, DeleteInitiatedBy;
+  accountsCreatedDeleted
+version: 1.0.0
