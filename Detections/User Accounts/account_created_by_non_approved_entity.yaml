@@ -1,0 +1,16 @@
+name: Account created by non-approved user or process.
+description: |
+  'This rule detects whether a new account has been created by any other user or process besides the one in the whitelist'
+severity: Medium
+queryFrequency: 15m
+lookBackPeriod: 15m
+tactics:
+  - Privilege Escalation
+  - Persistence
+query: |
+  AuditLogs
+  | where OperationName == "Add user"
+  | where Result == "success"
+  // Allow list
+  | where not(InitiatedBy has_any ("AllowedUser1", "AllowedUser2"))
+version: 1.0.0
